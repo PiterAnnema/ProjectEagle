@@ -153,6 +153,8 @@ void readSerial()
       case 's' :
         if (game_state)
           stopGame();
+        else if (ready_state)
+          startGame();
         break;
       case 't' :
         printTimes();
