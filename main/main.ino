@@ -1,29 +1,46 @@
 #include "Arduino.h"
 #include "HardwareSerial.h"
 
-const int pin_vd    = 8; // voordrink pin
-const int n_players = 4;
-const int players[n_players] = {46, 47, 48, 49};
-const long int min_down = 10;
+const byte pin_vd    = 8; // voordrink pin
+const byte n_players = 28;
+const byte players[n_players] = {22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49};
+
+//const byte n_players = 1;
+//const byte players[n_players] = {33};
+
+const int min_down = 10;
 
 bool player_gs[n_players];
-long int player_down[n_players];
-long int t_start;
+unsigned long player_down[n_players];
+unsigned long player_times[n_players];
+unsigned long t_start;
 bool game_state;
-long int vd_down;
+bool ready_state;
+unsigned long vd_down;
 bool vd_up = true;
+
+long int cycle_count;
+
+
+#define ready_code  "RDY"
+#define start_code  "STR"
+#define stop_code   "STP"
+#define times_code  "TMS"
+#define finish_code "FIN"
+#define gametime_code "GMT"
+#define cyclecount_code "CYC"
+
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
 
-  Serial.println("0, 1, 2, 3");
   for (int i = 0; i != n_players; ++i)
   {
     pinMode(players[i], INPUT_PULLUP);
   }
 
-  set_all_players(false);
+  setAllPlayers(false);
 
   pinMode(pin_vd, INPUT_PULLUP);
   game_state = false;
@@ -34,6 +51,74 @@ void setup() {
 }
 
 void loop() {
+  readSerial();
+
+  if (!ready_state)
+    return;
+
+  if (!game_state)
+    readVd();
+  else
+    gameCycle();
+}
+
+
+void gameCycle()
+{
+  cycle_count ++;
+  bool all_states = false;
+  
+  for (int i = 0; i != n_players; ++i)
+  {
+    if (!player_gs[i])                        // if player is not in the game, skip it.
+      continue;
+      
+    long int t = millis();
+
+    if (!digitalRead(players[i])){            // check if player button is down.
+
+                                              // check if player button was down before
+      if (player_down[i] == 0)                // first time down
+        player_down[i] = t;
+      else                                    // was already down
+        if (t - player_down[i] > min_down){   // was down for at least min_down milliseconds
+          player_times[i] = player_down[i] - t_start;
+          player_gs[i] = false;
+
+          Serial.print(finish_code);
+          Serial.print(' '); 
+          Serial.print(players[i]);
+          Serial.print(":");
+          Serial.println(player_times[i]);
+        }
+        
+    } else                                    // button is up
+      player_down[i] = 0;
+
+    all_states = true;                        // there are still players in the game
+  }
+
+  if (!all_states) {                          // are there players left in the game?
+    stopGame();
+  }
+}
+
+
+void printTimes()
+{
+  Serial.print(times_code);
+  Serial.print(" {");
+  for (int i = 0; i != n_players; ++i) {
+    if (i)
+      Serial.print(',');
+    Serial.print(i); Serial.print(':'); Serial.print(player_times[i]);
+  }
+  Serial.println('}');
+}
+
+
+void readVd()
+{
   if (!digitalRead(pin_vd))
   {
     bool vd = false;
@@ -44,9 +129,7 @@ void loop() {
       if (vd_up == true && t - vd_down > min_down) {
         vd_up = false;
         if (game_state == false)
-          start_game();
-        else
-          stop_game();
+          startGame();
       }
     }
   }
@@ -54,60 +137,69 @@ void loop() {
     vd_down = 0;
     vd_up = true;
   }
+}
 
-  if (game_state)
-  {
-    bool all_states = true;
-    
-    for (int i = 0; i != n_players; ++i)
-    {
-      long int t = millis();
-      if (!player_gs[i] && !digitalRead(players[i])){
-        if (player_down[i] == 0)
-          player_down[i] = t;
-        else
-          if (t - player_down[i] > min_down){
-            Serial.print(players[i]);
-            Serial.print(": ");
-            Serial.println(t - t_start);
-            player_gs[i] = true;
-          }
-      } else
-        player_down[i] = 0;
+void readSerial()
+{
+  if (Serial.available() > 0) {
+    // read the incoming byte:
+    byte incomingByte = Serial.read();
 
-      if (all_states && !player_gs[i])
-        all_states = false;
+    switch (incomingByte) {
+      case 'r' :
+        if (!ready_state)
+          getReady();
+        break;
+      case 's' :
+        if (game_state)
+          stopGame();
+        break;
+      case 't' :
+        printTimes();
     }
-
-    if (all_states)
-      stop_game();
   }
 }
 
-void start_game()
+void getReady()
+{
+  Serial.println(ready_code);
+  ready_state = true;
+}
+
+
+void startGame()
 {
   digitalWrite(LED_BUILTIN, HIGH);
-  Serial.println("START");
+  Serial.println(start_code);
+  
   game_state = true;
-  set_all_players(false);
+  setAllPlayers(true);
+  
   t_start = millis();
-  delay(10);
+  cycle_count = 0;
 }
 
-void stop_game()
+void stopGame()
 {
   digitalWrite(LED_BUILTIN, LOW);
-  Serial.println("STOP");
+  Serial.println(stop_code);
+  
   game_state = false;
-  set_all_players(false);
+  ready_state = false;
+  
+  long int game_time = millis() - t_start;
+  Serial.print(gametime_code);   Serial.print(' '); Serial.println(game_time);
+  Serial.print(cyclecount_code); Serial.print(' '); Serial.println(cycle_count);
   delay(10);
 }
 
-void set_all_players(bool state)
+
+void setAllPlayers(bool state)
 {
   for (int i = 0; i != n_players; ++i)
   {
     player_gs[i] = state;
     player_down[i] = 0;
+    player_times[i] *= !state;
   }
 }
