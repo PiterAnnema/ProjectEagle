@@ -1,7 +1,11 @@
 from serial import Serial
 import threading
 import time
+import numpy as np
+import json
 
+from tourDatabase import TourDatabase
+from tableManager import tableManager
 
 class SerialHandler():
     def __init__(self, port=None, baud=None):
@@ -12,76 +16,116 @@ class SerialHandler():
 
         self.connectSerial()
 
+        self._running = False
+
 
     def connectSerial(self):
         while True:
             try:
                 print('Connecting', self.port, self.baud)
+                # raise ValueError
                 self.connection = Serial(self.port, self.baud)
             except Exception as e:
                 print(e)
+                for i in range(10, 0, -1):
+                    print('Trying again in %2d' % i)
+                    time.sleep(1)
             else:
+                print('Serial connection established @%s - %d' % (self.port, self.baud))
                 break
 
 
     def startMonitor(self, callback, *args, **kwargs):
         self.monitor = threading.Thread(target=self.serialMonitor, args=(callback,*args), kwargs=kwargs)
+
+        self._running = True
         self.monitor.start()
+
+    def stopMonitor(self):
+        self._running = False
 
 
     def serialMonitor(self, callback, *args, **kwargs):
-        while True:
+        while self._running:
             line = self.connection.readline().decode().strip()
             callback(line, *args, **kwargs)
+            time.sleep(0.1)
 
     def write(self, data: str):
+        print('writing ', data)
         self.connection.write(data.encode())
 
 
 class PromptHandler():
+    def __init__(self):
+        self._running = False
+
+
     def startMonitor(self, callback, *args, **kwargs):
         self.monitor = threading.Thread(target=self.promptMonitor, args=(callback,*args), kwargs=kwargs)
+
+        self._running = True
         self.monitor.start()
 
+    def stopMonitor(self):
+        self._running = False
+
+
     def promptMonitor(self, callback, *args, **kwargs):
-        while True:
+        while self._running:
             line = input()
             callback(line, *args, **kwargs)
 
 
-class TourGame():
-    def __init__(self, name, n_players=28):
+class TourRound():
+    def __init__(self, name, setup=False, verbose = False):
         self.name = name
-        self.finished = []
+        self.setup = setup
+        self.verbose = verbose
 
-    def finish(self, player, time):
-        print('finish', player, time)
-        self.finished.append((player, time))
-
-
-    def start(self):
-        print('starting', self.name)
-        self.state = True
-
-
-    def stop(self):
-        print('stopping', self.name)
-        self.state = False
-
-
-
-class Tour():
-    def __init__(self):
-        self.game = None
-
-        self.serial_conn = SerialHandler('/dev/cu.usbmodem14501', 115200)
+        # Establish a serial connection
+        self.serial_conn = SerialHandler('/dev/cu.usbmodem14601', 115200)
         self.serial_conn.startMonitor(self.processSerial)
+
+
+        # Estabslih database connection
+        self.tdb = TourDatabase(verbose=True)
+        self.tdb.backup()
+        self.round_id = self.tdb.addRound(self.name)
+
+        self.n_players = self.tdb.getNumberOfPlayers()
 
         self.prompt_conn = PromptHandler()
         self.prompt_conn.startMonitor(self.processPrompt)
+        self.tm = tableManager()
+
+        self.tm.roundTimes()
+        self.tm.allPoints()
+        self.tm.playerPoints()
+
+        self.t_last_html_update = time.time()
+
+        if setup:
+            print('SETUP')
+
+            players = self.tdb.getPlayersWithoutPin()
+            for player_id, player_name in players:
+                self.bind_pin = -1
+                print(player_name)
+                while self.bind_pin == -1:
+                    # print("Waiting")
+                    # time.sleep(1)
+                    pass
+                self.tdb.bindPinToPlayer(self.bind_pin, player_id)
+                self.tdb.addTime(self.bind_pin, self.round_id, 0, 0)
+                self.tm.roundTimes()
+                self.tm.allPoints()
+                self.tm.playerPoints()
+            self.stopGame()
 
 
     def processSerial(self, line: str, name = 'SERIAL'):
+        print(line)
         data = line.split(' ')
         code = data[0]
         value = None
@@ -89,33 +133,73 @@ class Tour():
             value = data[1]
 
         if code == 'FIN':
-            player, time = value.split(':')
-            self.game.finish(player, time)
+            pin_id, time_value = value.split(':')
+
+            if self.setup:
+                print('Got pin', pin_id)
+                self.bind_pin = int(pin_id)
+
+            else:
+                self.finishPlayer(int(pin_id), int(time_value))
+                t_now = time.time()
+                if (t_now - self.t_last_html_update> 0.2):
+                    self.tm.roundTimes()
+                    self.tm.allPoints()
+                    self.tm.playerPoints()
+                    self.t_last_html_update = t_now
+
         elif code == 'GMT':
-            print('gametime', value)
+            pass
+            # print('gametime', value)
+        elif code == 'STP':
+            self.stopGame()
+        elif code == 'STR':
+            self.points = self.n_players
             
-        print(code, value)
+        if self.verbose:
+            print(name, code, value)
 
 
     def processPrompt(self, line: str, name = 'PROMPT'):
-        self.serial_conn.write(line)
+        if line == 'ready':
+            self.readyGame()
+
+        elif line == 'stop':
+            self.serial_conn.write('s')
+            self.stopGame()
+
+        elif line == 'start':
+            self.startGame()
+
+
+    def readyGame(self):
+        self.serial_conn.write('r')
 
     def startGame(self):
-        self.game.start()
+        self.serial_conn.write('s')
 
 
     def stopGame(self):
-        self.game.stop()
-        print(self.game.finished)
+        print('Stopped')
+        print('Closing serial connection')
+        self.serial_conn.stopMonitor()
+        print('Closing prompt connection')
+        print('Press enter to exit prompt')
+        self.prompt_conn.stopMonitor()
+        self.tm.roundTimes()
+        self.tm.allPoints()
+        self.tm.playerPoints()
 
 
-    def newGame(self, name):
-        self.game = TourGame(name)
+    def finishPlayer(self, pin_id, time_value):
+        self.tdb.addTime(pin_id, self.round_id, time_value, self.points)
+        self.points -= 1
+
 
 
 def main():
-    tour = Tour()
-    tour.newGame('round1')
+    round_name = input('Enter round name: ')
+    TourRound(round_name, setup=(round_name == 'setup'), verbose=False)
 
 
 if __name__ == '__main__':

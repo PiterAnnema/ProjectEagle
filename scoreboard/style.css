@@ -1,0 +1,69 @@
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-row-gap: 30px;
+    grid-column-gap: 30px;
+}
+.grid-item {
+    font-size: 20px;
+    text-align: center;
+}
+
+:root {
+    --team1-color: rgb(180, 25, 25);
+    --team2-color: rgb(230, 76, 0);
+    --team3-color: rgb(49, 141, 7);
+    --team4-color: rgb(70, 136, 206);
+    --team5-color: rgb(110, 46, 206);
+    --team6-color: rgb(199, 69, 211);
+    --team7-color: rgb(211, 69, 100);
+}
+
+.team1 {color: var(--team1-color);}
+.team2 {color: var(--team2-color);}
+.team3 {color: var(--team3-color);}
+.team4 {color: var(--team4-color);}
+.team5 {color: var(--team5-color);}
+.team6 {color: var(--team6-color);}
+.team7 {color: var(--team7-color);}
+
+.team-card.team1 {background-color: var(--team1-color);}
+.team-card.team2 {background-color: var(--team2-color);}
+.team-card.team3 {background-color: var(--team3-color);}
+.team-card.team4 {background-color: var(--team4-color);}
+.team-card.team5 {background-color: var(--team5-color);}
+.team-card.team6 {background-color: var(--team6-color);}
+.team-card.team7 {background-color: var(--team7-color);}
+
+.dot.team1 {background-color: var(--team1-color);}
+.dot.team2 {background-color: var(--team2-color);}
+.dot.team3 {background-color: var(--team3-color);}
+.dot.team4 {background-color: var(--team4-color);}
+.dot.team5 {background-color: var(--team5-color);}
+.dot.team6 {background-color: var(--team6-color);}
+.dot.team7 {background-color: var(--team7-color);}
+
+.team-card {color: white; opacity: 0.9;}
+
+.team-card, .round-card, .leaderboard-card, h2 {
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 1);
+    padding: 30px
+}
+
+.dot {
+  height: 15px;
+  width: 15px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+body {
+    font-family: Gill Sans, Gill Sans MT,'Gill Sans','Gill Sans MT',sans-serif, Verdana, Tahoma, Arial, Charter; 
+    color: black;
+    padding-left: 30px;
+    padding-right: 30px;}
+body {background-color: rgba(131, 190, 192, 0.2);}
+table {text-align: left; font-size: 25px; border: 0px solid black; width: 100%;}
+.score, .time {text-align: right;}
+h2 {text-transform: uppercase; font-weight: normal;}

@@ -47,7 +47,7 @@ void setup() {
   vd_down = 0;
 
   pinMode(LED_BUILTIN, OUTPUT);
-
+  randomSeed(analogRead(0));
 }
 
 void loop() {
@@ -67,31 +67,31 @@ void gameCycle()
 {
   cycle_count ++;
   bool all_states = false;
-  
+
   for (int i = 0; i != n_players; ++i)
   {
     if (!player_gs[i])                        // if player is not in the game, skip it.
       continue;
-      
+
     long int t = millis();
 
-    if (!digitalRead(players[i])){            // check if player button is down.
+    if (!digitalRead(players[i])) {           // check if player button is down.
 
-                                              // check if player button was down before
+      // check if player button was down before
       if (player_down[i] == 0)                // first time down
         player_down[i] = t;
       else                                    // was already down
-        if (t - player_down[i] > min_down){   // was down for at least min_down milliseconds
+        if (t - player_down[i] > min_down) {  // was down for at least min_down milliseconds
           player_times[i] = player_down[i] - t_start;
           player_gs[i] = false;
 
           Serial.print(finish_code);
-          Serial.print(' '); 
-          Serial.print(players[i]);
+          Serial.print(' ');
+          Serial.print(i);
           Serial.print(":");
           Serial.println(player_times[i]);
         }
-        
+
     } else                                    // button is up
       player_down[i] = 0;
 
@@ -173,10 +173,10 @@ void startGame()
 {
   digitalWrite(LED_BUILTIN, HIGH);
   Serial.println(start_code);
-  
+
   game_state = true;
   setAllPlayers(true);
-  
+
   t_start = millis();
   cycle_count = 0;
 }
@@ -185,10 +185,10 @@ void stopGame()
 {
   digitalWrite(LED_BUILTIN, LOW);
   Serial.println(stop_code);
-  
+
   game_state = false;
   ready_state = false;
-  
+
   long int game_time = millis() - t_start;
   Serial.print(gametime_code);   Serial.print(' '); Serial.println(game_time);
   Serial.print(cyclecount_code); Serial.print(' '); Serial.println(cycle_count);

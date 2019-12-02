@@ -1,3 +1,9 @@
 *.json
+*.db
+*.bak
+*.pyc
 
 .venv/
+playerPoints.html
+roundTimes.html
+teamPoints.html
