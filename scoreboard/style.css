@@ -1,12 +1,15 @@
 .grid-container {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: auto auto auto;
     grid-row-gap: 30px;
     grid-column-gap: 30px;
 }
 .grid-item {
-    font-size: 20px;
     text-align: center;
+}
+
+.team-container{
+    grid-template-columns: repeat(3, 1fr);
 }
 
 :root {
@@ -52,8 +55,8 @@
 }
 
 .dot {
-  height: 20px;
-  width: 20px;
+  height: 15px;
+  width: 15px;
   border-radius: 50%;
   display: inline-block;
 }
@@ -64,6 +67,6 @@ body {
     padding-left: 30px;
     padding-right: 30px;}
 body {background-color: rgba(131, 190, 192, 0.2);}
-table {text-align: left; font-size: 25px; border: 0px solid black; width: 100%;}
+table {text-align: left; font-size: 20px; border: 0px solid black; width: 100%;}
 .score, .time {text-align: right;}
-h2 {text-transform: uppercase; font-weight: normal;}
+h2 {text-transform: uppercase; font-weight: normal; font-size: 30px;}

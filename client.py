@@ -52,7 +52,6 @@ class SerialHandler():
             time.sleep(0.1)
 
     def write(self, data: str):
-        print('writing ', data)
         self.connection.write(data.encode())
 
 
@@ -91,6 +90,14 @@ class TourRound():
         # Estabslih database connection
         self.tdb = TourDatabase(verbose=True)
         self.tdb.backup()
+
+        players_wo_pin = self.tdb.getPlayersWithoutPin()
+        print(len(players_wo_pin))
+        if len(players_wo_pin) > 0:
+            print('Players without pin detected')
+            self.setup = True
+            self.name = 'SETUP'
+
         self.round_id = self.tdb.addRound(self.name)
 
         self.n_players = self.tdb.getNumberOfPlayers()
@@ -105,16 +112,12 @@ class TourRound():
 
         self.t_last_html_update = time.time()
 
-        if setup:
+        if self.setup:
             print('SETUP')
-
-            players = self.tdb.getPlayersWithoutPin()
-            for player_id, player_name in players:
+            for player_id, player_name in players_wo_pin:
                 self.bind_pin = -1
                 print(player_name)
                 while self.bind_pin == -1:
-                    # print("Waiting")
-                    # time.sleep(1)
                     pass
                 self.tdb.bindPinToPlayer(self.bind_pin, player_id)
                 self.tdb.addTime(self.bind_pin, self.round_id, 0, 0)
@@ -125,7 +128,6 @@ class TourRound():
 
 
     def processSerial(self, line: str, name = 'SERIAL'):
-        print(line)
         data = line.split(' ')
         code = data[0]
         value = None
@@ -136,7 +138,6 @@ class TourRound():
             pin_id, time_value = value.split(':')
 
             if self.setup:
-                print('Got pin', pin_id)
                 self.bind_pin = int(pin_id)
 
             else:
@@ -150,7 +151,6 @@ class TourRound():
 
         elif code == 'GMT':
             pass
-            # print('gametime', value)
         elif code == 'STP':
             self.stopGame()
         elif code == 'STR':
@@ -199,7 +199,7 @@ class TourRound():
 
 def main():
     round_name = input('Enter round name: ')
-    TourRound(round_name, setup=(round_name == 'setup'), verbose=False)
+    TourRound(round_name, setup=(round_name == 'setup'), verbose=True)
 
 
 if __name__ == '__main__':

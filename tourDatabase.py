@@ -29,7 +29,7 @@ class TourDatabase():
         c.execute(
             "CREATE TABLE IF NOT EXISTS rounds \
             (   round_id     INTEGER PRIMARY KEY, \
-                round_name   VARCHAR NOT NULL UNIQUE \
+                round_name   VARCHAR NOT NULL \
             )"
         )
 

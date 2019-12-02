@@ -38,7 +38,7 @@ class tableManager():
         
         result = c.fetchall()
 
-        html = "<div><h2>Round %d: %s</h2><div class=\"leaderboard-card\"><table>\n" % (round_id, round_name)
+        html = "<div><h2>Round %d: %s</h2><div class=\"leaderboard-card\"><table>\n" % (round_id -1, round_name)
         html += "<tr><th>Player</th><th class=\"time\">Time</th><th class=\"score\">Points</th></tr>\n"
         # html += "<tr><th>Team</th><th>Player</th><th class=\"time\">Time</th><th class=\"score\">Points</th></tr>\n"
 
@@ -99,7 +99,7 @@ class tableManager():
         result = c.fetchall()
         c.close()
 
-        html = "<div><h2>Teams</h2><div class=\"grid-container\">\n"
+        html = "<div><h2>Teams</h2><div class=\"grid-container team-container\">\n"
         for team_id, team_name, team_points in result:
             html += "<div class=\"grid-item team-card team%d\"><table>" % (team_id, )
             html += "<tr><th>%s</th><th class=\"score\">%3d</th></tr>\n" % (team_name, team_points)

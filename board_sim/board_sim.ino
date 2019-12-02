@@ -73,7 +73,7 @@ void gameCycle()
 
     long int t = millis();
 
-    randnumber = random(10000);
+    randnumber = random(2000);
     if (randnumber == 1) {
       player_times[i] = t - t_start;
       player_gs[i] = false;
