@@ -70,12 +70,12 @@ class TourDatabase():
         return n_players
 
     
-    def getPlayersWithoutPin(self):
+    def getPlayerWithoutPin(self):
         db = sqlite3.connect(self.db_filename)
 
         c = db.cursor()
-        c.execute("SELECT player_id, player_name from players WHERE pin_id IS NULL ORDER BY team_id")
-        result = c.fetchall()
+        c.execute("SELECT player_id, player_name from players WHERE pin_id IS NULL ORDER BY team_id LIMIT 1")
+        result = c.fetchone()
         c.close()
         return result
 
@@ -116,6 +116,7 @@ class TourDatabase():
     def bindPinToPlayer(self, pin_id, player_id):
         db = sqlite3.connect(self.db_filename)
         c = db.cursor()
+        print("Binding player {:d} to pin {:d}".format(player_id, pin_id))
         c.execute("UPDATE players set pin_id=? where player_id=?", (pin_id, player_id))
 
         db.commit()
