@@ -3,14 +3,53 @@ import shutil
 import os
 import datetime
 
-class TourDatabase():
-    def __init__(self, db_filename='tour.db', verbose=False):
-        self.db_filename = db_filename
-        self.verbose = verbose
-        db = sqlite3.connect(self.db_filename)
+class DBConnector(object):
+    def __init__(self):
+        self._dbconn = None
 
-        c = db.cursor()
-        c.execute(
+
+    def create_connection(self):
+        return sqlite3.connect('tour.db')
+
+
+    def __enter__(self):
+        self._dbconn = self.create_connection()
+        return self._dbconn
+
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._dbconn.close()
+
+
+class DBConnection(object):
+    def __init__(self):
+        self._conn = None
+
+
+    @classmethod
+    def get_connection(cls, new=False):
+        """Creates return new Singleton database connection"""
+        if new or not cls._conn:
+            cls._conn = DBConnector().create_connection()
+        return cls._conn
+
+
+    @classmethod
+    def execute_query(cls, query, params=None):
+        """execute query on singleton db connection"""
+        with cls.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(query, params)
+            result = cur.fetchall()
+            cur.close()
+        return result
+
+
+class TourDatabase():
+    def __init__(self):
+        self._db = DBConnection()
+
+        self._db.execute_query(
             "CREATE TABLE IF NOT EXISTS players \
             (   player_id   INTEGER PRIMARY KEY, \
                 pin_id      INTEGER, \
@@ -19,21 +58,21 @@ class TourDatabase():
                 )"
             )
 
-        c.execute(
+        self._db.execute_query(
             "CREATE TABLE IF NOT EXISTS teams \
             (   team_id     INTEGER PRIMARY KEY, \
                 team_name   VARCHAR NOT NULL UNIQUE \
             )"
         )
 
-        c.execute(
+        self._db.execute_query(
             "CREATE TABLE IF NOT EXISTS rounds \
             (   round_id     INTEGER PRIMARY KEY, \
                 round_name   VARCHAR NOT NULL \
             )"
         )
 
-        c.execute(
+        self._db.execute_query(
             "CREATE TABLE IF NOT EXISTS times \
             (   time_id     INTEGER PRIMARY KEY, \
                 player_id   INTEGER NOT NULL, \
@@ -44,102 +83,49 @@ class TourDatabase():
             )"
         )
 
-        db.commit()
-        c.close()
-
-    def populate(self, autopin=False):
+    def populate(self):
         import json
         with open('teams.json', 'r') as f:
             teams = json.load(f)
 
-        i = 22
         for team_name in teams:
             team_id = self.addTeam(team_name)
             for player in teams[team_name]:
-                self.addPlayer(player, team_id, i if autopin else None)
-                i += 1
+                self.addPlayer(player, team_id)
 
 
     def getNumberOfPlayers(self):
-        db = sqlite3.connect(self.db_filename)
-
-        c = db.cursor()
-        c.execute("SELECT COUNT(*) FROM players")
-        n_players = c.fetchall()[0][0]
-        c.close()
+        result = self._db.execute_query("SELECT COUNT(*) FROM players")
+        n_players = result[0][0]
         return n_players
 
     
     def getPlayersWithoutPin(self):
-        db = sqlite3.connect(self.db_filename)
-
-        c = db.cursor()
-        c.execute("SELECT player_id, player_name from players WHERE pin_id IS NULL ORDER BY team_id")
-        result = c.fetchall()
-        c.close()
+        result = self._db.execute_query("SELECT player_id, player_name from players WHERE pin_id IS NULL ORDER BY team_id")
         return result
 
 
-    def getTeamIdByName(self, team_name):
-        db = sqlite3.connect(self.db_filename)
-
-        c = db.cursor()
-        c.execute("SELECT team_id from teams WHERE team_name like ?", (team_name, ))
-        team_id = c.fetchall()
-        if not team_id:
-            raise ValueError("No teams found with that name")
-        elif len(team_id) > 1:
-            raise ValueError("Multiple teams found, be more specific")
-
-        c.close()
-
-        return team_id[0][0]
-
-    
-    def addPlayerToTeam(self, player_name, team_name, pin_id = None):
-        team_id = self.getTeamIdByName(team_name)
-        return self.addPlayer(player_name, team_id, pin_id)
-
-
     def addPlayer(self, player_name, team_id, pin_id = None):
-        db = sqlite3.connect(self.db_filename)
-        c = db.cursor()
-        c.execute("INSERT INTO players(pin_id, player_name, team_id) \
+        result = self._db.execute_query("INSERT INTO players(pin_id, player_name, team_id) \
                     VALUES (?, ?, ?)", (pin_id, player_name, team_id))
-
-        db.commit()
-        c.close()
-        
-        return c.lastrowid
+        return result.lastrowid
 
 
     def bindPinToPlayer(self, pin_id, player_id):
-        db = sqlite3.connect(self.db_filename)
-        c = db.cursor()
-        c.execute("UPDATE players set pin_id=? where player_id=?", (pin_id, player_id))
-
-        db.commit()
-        c.close()
-        
-        return c.lastrowid
+        result = self._db.execute_query("UPDATE players set pin_id=? where player_id=?", (pin_id, player_id))
+        return result
 
 
     def addTeam(self, team_name):
-        db = sqlite3.connect(self.db_filename)
-        c = db.cursor()
-        c.execute("INSERT INTO teams(team_name) \
+        result = self._db.execute_query("INSERT INTO teams(team_name) \
                     VALUES (?)", (team_name, ))
-
-        db.commit()
-        c.close()
-
-        return c.lastrowid
+        return result.lastrowid
 
 
     def addRound(self, round_name):
-        db = sqlite3.connect(self.db_filename)
+        db = sqlite3.connect(self._db_filename)
         c = db.cursor()
-        c.execute("INSERT INTO rounds(round_name) \
+        db.execute_query("INSERT INTO rounds(round_name) \
                     VALUES (?)", (round_name, ))
 
         db.commit()
@@ -154,11 +140,11 @@ class TourDatabase():
     def addTime(self, pin_id, round_id, time_value, points):
         if self.verbose:
             print('TOURDB', 'Adding time record @pin: %d, round: %d, time %d' % (pin_id, round_id, time_value))
-        db = sqlite3.connect(self.db_filename)
+        db = sqlite3.connect(self._db_filename)
         c = db.cursor()
-        c.execute("SELECT player_id from players where pin_id=?", (pin_id, ))
+        db.execute_query("SELECT player_id from players where pin_id=?", (pin_id, ))
         player_id = c.fetchone()[0]
-        c.execute("INSERT INTO times(player_id, round_id, time_value, points) \
+        db.execute_query("INSERT INTO times(player_id, round_id, time_value, points) \
                     VALUES (?, ?, ?, ?)", (player_id, round_id, time_value, points))
 
         db.commit()
@@ -170,13 +156,13 @@ class TourDatabase():
     def backup(self, backup_dir = 'db_backups'):
         dt = datetime.datetime.now()
         dt_str = dt.strftime("%d_%m_%Y_%H_%M_%S")
-        dst = os.path.join(backup_dir, dt_str + self.db_filename + '.bak')
-        shutil.copyfile(self.db_filename, dst)
+        dst = os.path.join(backup_dir, dt_str + self._db_filename + '.bak')
+        shutil.copyfile(self._db_filename, dst)
 
 
 
 def main():
-    tdb = TourDatabase(verbose=True)
+    tdb = TourDatabase()
     tdb.populate()
 
 
