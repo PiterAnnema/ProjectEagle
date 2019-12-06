@@ -7,16 +7,18 @@
 </head>
 <body>
 <div class="grid-container">
-    <div class="grid-item" id="roundTimes"></div>
-    <div class="grid-item" id="teamPoints"></div>
-    <div class="grid-item" id="playerPoints"></div>
+    <div class="grid-item" id="column0"></div>
+    <div class="grid-item" id="column1"></div>
+    <div class="grid-item" id="column2"></div>
+    <div class="grid-item" id="column3"></div>
 </div>
 <script type='text/javascript'>
     // refresh every 5 seconds
     var refresher = setInterval(function(){
-        $('#roundTimes').load("./roundTimes.html");
-        $('#teamPoints').load("./teamPoints.html");
-        $('#playerPoints').load("./playerPoints.html");
+        $('#column0').load("./column0.html");
+        $('#column1').load("./column1.html");
+        $('#column2').load("./column2.html");
+        $('#column3').load("./column3.html");
     }, 500);
 </script>
 </body>

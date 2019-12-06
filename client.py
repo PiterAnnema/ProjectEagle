@@ -3,9 +3,13 @@ import threading
 import time
 import numpy as np
 import json
+import config
 
-from tourDatabase import TourDatabase
-from tableManager import tableManager
+import Scoreboard
+
+from DBConnection import DBConnection
+import tourStoredProcedures
+
 
 class StreamMonitor(object):
     def __init__(self, read_call):
@@ -25,13 +29,13 @@ class StreamMonitor(object):
 
     def stop(self):
         self._running = False
-        # self._monitor.join()
 
 
     def _target(self, callback, *args, **kwargs):
         while self._running:
             data = self._read()
             callback(data, *args, **kwargs)
+
 
 
 class SerialHandler(object):
@@ -66,15 +70,55 @@ class SerialHandler(object):
         self.connection.write(data.encode())
 
 
+
 class Round(object):
-    def __init__(self, name, db_conn, serial_conn):
-        self.db_conn = db_conn
+    def __init__(self, name, serial_conn):
         self.serial_conn = serial_conn
         self.name = name
-        self.round_id = self.db_conn.addRound(name)
-        self.n_players = self.db_conn.getNumberOfPlayers()
+
+        with DBConnection() as db:
+            # Insert round into database
+            result = db.execute_query("INSERT INTO rounds(name) \
+                        VALUES (?)", (self.name, ))
+            self.round_id = result.lastrowid
+
+            # Get team_id: [pin_ids] dict
+            result = db.execute_query("SELECT players.team_id, json_group_array(players.pin_id) FROM players GROUP BY players.team_id")
+
+            self.teams = dict()
+            for team_id, pin_ids in result.fetchall():
+                self.teams[team_id] = json.loads(pin_ids)
+
+        
+        self.n_players = len(self.pin_ids)
         self.readyState = False
         self.gameState = False
+
+
+
+    @property
+    def pin_ids(self):
+        pin_ids = []
+        for ids in self.teams.values():
+            pin_ids += ids
+        return pin_ids
+
+    @property
+    def team_ids(self):
+        return self.teams.keys()
+
+
+    def removePin(self, pin_id):
+        for team_id in self.teams:
+            if pin_id in self.teams[team_id]:
+                self.teams[team_id].remove(pin_id)
+                return team_id
+        
+        return None
+
+
+    def removeTeam(self, team_id):
+        del self.teams[team_id]
 
 
     def sendReady(self):
@@ -101,66 +145,103 @@ class Round(object):
         self.gameState = False
 
 
-
     def finishPin(self, pin_id, time_value):
         pass
 
 
 
 class IndividualRound(Round):
-    def __init__(self, name, db_conn, serial_conn):
-        super().__init__(name, db_conn, serial_conn)
-        self.points = None
+    def __init__(self, name, serial_conn):
+        super().__init__(name, serial_conn)
 
 
     def recvReady(self):
-        self.points = self.n_players
         super().recvReady()
 
 
     def finishPin(self, pin_id, time_value):
-        self.db_conn.addTime(pin_id, self.round_id, time_value, self.points)
-        self.points -= 1
+        if pin_id in self.pin_ids:
+            pin_points = len(self.pin_ids)
+            tourStoredProcedures.addPinTime(pin_id, self.round_id, time_value, pin_points)
+
+            team_id = self.removePin(pin_id)
+            if not self.teams[team_id]:
+                team_points = len(self.teams)
+                tourStoredProcedures.addTeamTime(team_id, self.round_id, time_value, team_points)
+                self.removeTeam(team_id)
+
+            if not self.pin_ids:
+                self.sendStop()
 
 
 
 class SetupRound(Round):
-    def __init__(self, name, db_conn, serial_conn):
-        super().__init__(name, db_conn, serial_conn)
+    def __init__(self, name, serial_conn):
+        super().__init__(name, serial_conn)
         self.points = 0
 
         self.player_name = None
         self.player_id = None
 
+
     def nextPlayer(self):
-        player = self.db_conn.getPlayerWithoutPin()
-        print('Nextplayer', player)
-        if player != None:
-            self.player_id, self.player_name = player
-            print('Player: {}'.format(self.player_name))
-        else:
-            self.sendStop()
+        with DBConnection() as db:
+            db.execute_query("SELECT players.id, players.name from players WHERE pin_id IS NULL ORDER BY team_id LIMIT 1")
+            result = db.cur.fetchone()
+            if result == None:
+                self.sendStop()
+                return
+
+            self.player_id, self.player_name = result
+
+        print('Player: {}'.format(self.player_name))
 
 
     def recvReady(self):
-        print('Here')
         self.nextPlayer()
         super().recvReady()
 
 
     def finishPin(self, pin_id, time_value):
-        self.db_conn.bindPinToPlayer(pin_id, self.player_id)
-        self.db_conn.addTime(pin_id, self.round_id, time_value, self.points)
+        with DBConnection() as db:
+            db.execute_query("UPDATE players SET pin_id=? WHERE players.id=?", (pin_id, self.player_id))
+
+        tourStoredProcedures.addPinTime(pin_id, self.round_id, 0, self.points)
 
         self.nextPlayer()
 
         super().finishPin(pin_id, time_value)
 
 
+
+class TeamRound(Round):
+    def __init__(self, name, serial_conn):
+        super().__init__(name, serial_conn)
+
+
+    def recvReady(self):
+        self.points = self.n_players//4
+        super().recvReady()
+
+
+    def finishPin(self, pin_id, time_value):
+        if pin_id in self.pin_ids:
+            team_id = self.removePin(pin_id)
+            
+            team_points = len(self.teams)
+            tourStoredProcedures.addTeamTime(team_id, self.round_id, time_value, team_points)
+
+            self.removeTeam(team_id)
+
+        if not self.pin_ids:
+            self.sendStop()
+
+
+
 class Tour():
     def __init__(self, name: str, mode: str):
         # Establish a serial connection
-        self.serial_conn = SerialHandler('COM4', 115200)
+        self.serial_conn = SerialHandler(config.SERIAL_PORT, config.SERIAL_BAUD)
         self.serial_monitor = StreamMonitor(self.serial_conn.read)
         self.serial_monitor.start(self.processSerial, name='SERIAL')
 
@@ -168,27 +249,27 @@ class Tour():
         self.prompt_monitor = StreamMonitor(input)
         self.prompt_monitor.start(self.processPrompt, name='PROMPT')
 
-        # Estabslih database connection
-        self.db_conn = TourDatabase(verbose=True)
-        self.db_conn.backup()
-
-        # If there are player without a pin bound to them, start setup
-        if self.db_conn.getPlayerWithoutPin() != None:
-            print('Players without pin detected')
-            mode = 'setup'
-
 
         mode = mode.lower()
-        if mode == 'individual':
-            self.round = IndividualRound(name, self.db_conn, self.serial_conn)
+
+        if mode == 'team':
+            self.round = TeamRound(name, self.serial_conn)
         elif mode == 'setup':
-            self.round = SetupRound('SETUP', self.db_conn, self.serial_conn)
+            self.round = SetupRound('SETUP', self.serial_conn)
+        else:
 
+            self.round = IndividualRound(name, self.serial_conn)
 
-        # Start tablemanager
-        self.tm = tableManager()
-        self.t_last_html_update = 0
-        self.updateHtml()
+        timeBoard = Scoreboard.TeamTimes(self.round.round_id, self.round.name) if mode == 'team' else Scoreboard.PlayerTimes(self.round.round_id, self.round.name)
+        sections = [
+                [timeBoard],
+                [Scoreboard.TeamCards()],
+                [Scoreboard.Leaderboard('Leaderboard', 'pin_id')],
+                [Scoreboard.Leaderboard('Ladies', 'female'), Scoreboard.Leaderboard('Sjaars', 'sub_21')]
+            ]
+
+        self.sb = Scoreboard.ScoreBoard(sections)
+        self.sb.updateAll(force = True)
 
 
     def processSerial(self, line: str, name = 'SERIAL'):
@@ -201,7 +282,7 @@ class Tour():
         if code == 'FIN':
             pin_id, time_value = value.split(':')
             self.round.finishPin(int(pin_id), int(time_value))
-            self.updateHtml()
+            self.sb.updateAll(force=True)
 
         elif code == 'GMT':
             pass
@@ -215,15 +296,6 @@ class Tour():
 
         elif code == 'RDY':
             self.round.recvReady()
-
-
-    def updateHtml(self, force: bool = False):
-        t_now = time.time()
-        if (force or t_now - self.t_last_html_update > 0.5):
-            self.tm.roundTimes()
-            self.tm.allPoints()
-            self.tm.playerPoints()
-            self.t_last_html_update = t_now
 
 
 
@@ -240,7 +312,7 @@ class Tour():
 
 
     def stopGame(self):
-        self.updateHtml(force = True)
+        self.sb.stop()
         print('Closing serial connection')
         self.serial_monitor.stop()
         print('Closing prompt connection')
