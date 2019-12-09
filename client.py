@@ -83,11 +83,17 @@ class Round(object):
             self.round_id = result.lastrowid
 
             # Get team_id: [pin_ids] dict
-            result = db.execute_query("SELECT players.team_id, json_group_array(players.pin_id) FROM players GROUP BY players.team_id")
+            result = db.execute_query("SELECT players.team_id, players.pin_id FROM players")
+            # result = db.execute_query("SELECT players.team_id, json_group_array(players.pin_id) FROM players GROUP BY players.team_id")
 
-            self.teams = dict()
-            for team_id, pin_ids in result.fetchall():
-                self.teams[team_id] = json.loads(pin_ids)
+            teams = dict()
+            for team_id, pin_id in result.fetchall():
+                if team_id not in teams:
+                    teams[team_id] = []
+                teams[team_id].append(pin_id)
+
+                # self.teams[team_id] = json.loads(pin_ids)
+        self.teams = teams
 
         
         self.n_players = len(self.pin_ids)
@@ -264,8 +270,8 @@ class Tour():
         sections = [
                 [timeBoard],
                 [Scoreboard.TeamCards()],
-                [Scoreboard.Leaderboard('Leaderboard', 'pin_id')],
-                [Scoreboard.Leaderboard('Ladies', 'female'), Scoreboard.Leaderboard('Sjaars', 'sub_21')]
+                [Scoreboard.Leaderboard('Leaderboard')],
+                [Scoreboard.Leaderboard('Ladies', 'female'), Scoreboard.Leaderboard('Sjaars', 'sjaars')]
             ]
 
         self.sb = Scoreboard.ScoreBoard(sections)

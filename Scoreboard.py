@@ -26,25 +26,27 @@ class ScoreSection(object):
     def __init__(self):
         self._header = ''
         self._body = ''
+        self._body_prev = ''
         self._footer = ''
-
-        self._updated = False
 
 
     def update(self):
+        pass
         # print(__name__, self.__class__.__name__)
-        self._updated = True
 
 
     @property
     def updated(self):
-        return self._updated
+        return self._body != self._body_prev
 
 
     @property
     def html(self):
-        self._updated = False
         return self._header + self._body + self._footer
+
+    def readHtml(self):
+        self._body_prev = str(self._body)
+        return self.html
 
 
 
@@ -254,9 +256,15 @@ class TeamCards(ScoreSection):
 
 
 class Leaderboard(ScoreSection):
-    def __init__(self, name, attribute='1=1'):
+    def __init__(self, name, attribute=None):
         super().__init__()
-        self._attribute = attribute
+        # # if attribute:
+
+        #     # self._where = "'{}' IN (SELECT value FROM json_each(players.attributes))".format(attribute)
+        # else:
+        #     self._where = ''
+        self.attribute = attribute
+
         self._name = name
 
         self._header += '<div><h2>{:s}</h2><div class="leaderboard-card">\n'.format(name)
@@ -280,16 +288,16 @@ class Leaderboard(ScoreSection):
         body = ''
 
         with DBConnection() as db:
-            result = db.execute_query("SELECT players.name, players.team_id, \
+            result = db.execute_query("SELECT players.name, players.team_id, players.attributes, \
                     SUM (points)  AS total_points \
                     FROM player_times LEFT JOIN players ON players.id = player_times.player_id \
-                    WHERE {} \
-                    GROUP BY player_times.player_id ORDER BY total_points DESC".format(self._attribute))
+                    GROUP BY player_times.player_id ORDER BY total_points DESC")
 
             result = result.fetchall()
 
-        for player_name, team_id, total_points in result:
-            body += self._row(team_id, player_name, total_points)
+        for player_name, team_id, attributes, total_points in result:
+            if not self.attribute or self.attribute in attributes:
+                body += self._row(team_id, player_name, total_points)
 
         self._body = body
 
@@ -306,7 +314,7 @@ class ScoreBoard():
 
         self._t_update = 0
 
-    def updateAll(self, force=False):
+    def updateAll(self, force=True):
         t_now = time.time()
         
         if not force and t_now - self._t_update < 0.5:
@@ -349,7 +357,7 @@ class ScoreBoard():
     def writeColumn(self, c):
         html = ''
         for section in self.sections[c]:
-            html += section.html
+            html += section.readHtml()
 
 
         with open(os.path.join(self._html_dir, 'column{:d}.html'.format(c)), 'w') as f:

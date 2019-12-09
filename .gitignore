@@ -4,6 +4,6 @@
 *.pyc
 
 .venv/
-playerPoints.html
-roundTimes.html
-teamPoints.html
+config.py
+
+column*.html

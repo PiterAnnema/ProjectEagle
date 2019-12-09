@@ -9,8 +9,7 @@ def makeTables():
                 pin_id      INTEGER, \
                 name        VARCHAR NOT NULL UNIQUE, \
                 team_id     INTEGER NOT NULL, \
-                female      BOOLEAN DEFAULT FALSE, \
-                sub_21      BOOLEAN DEFAULT FALSE \
+                attributes  JSON\
                 )"
             )
 

@@ -24,7 +24,6 @@ class DBConnection:
     def open(self):
         try:
             conn = sqlite3.connect(self.name)
-            # conn.set_trace_callback(print)
             cur = conn.cursor()
         except sqlite3.Error as e:
             print("Error connecting to database!", e)

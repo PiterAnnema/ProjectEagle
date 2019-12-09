@@ -15,8 +15,8 @@ def main():
             team_id = db.cur.lastrowid
 
             for player in teams[team_name]:
-                db.execute_query("INSERT INTO players(name, team_id, female, sub_21) \
-                                VALUES (?, ?, ?, ?)", (player['name'], team_id, player['female'], player['sub_21']))
+                db.execute_query("INSERT INTO players(name, team_id, attributes) \
+                                VALUES (?, ?, ?)", (player['name'], team_id, json.dumps(player['attributes'])))
 
 
 if __name__ == "__main__":
