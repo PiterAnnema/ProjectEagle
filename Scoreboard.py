@@ -6,20 +6,21 @@ from DBConnection import DBConnection
 
 def pretty_time_delta(milliseconds):
     seconds, milliseconds = divmod(milliseconds, 1000)
+
     days, seconds = divmod(seconds, 86400)
     hours, seconds = divmod(seconds, 3600)
     minutes, seconds = divmod(seconds, 60)
-    t_str = ''
-    if days > 0:
-        t_str += '%dd ' % days
-    if hours > 0:
-        t_str += '%2d:' % (hours, )
-    if minutes > 0:
-        t_str += '%2d:' % (minutes, )
 
-    while milliseconds < 100:
-        milliseconds *= 10
-    return t_str + '%2d.%2d' % (seconds, milliseconds)
+    if days > 0:
+        return '{:d}d {:2d}h'.format(days, hours)
+
+    if hours > 0:
+        return '{:2d}:{:0>2d}'.format(hours, minutes)
+
+    if minutes > 0:
+        return '{:2d}:{:0>2.3f}'.format(minutes, seconds + milliseconds/1000)
+
+    return '{:2.3f}'.format(seconds + milliseconds/1000)
 
 
 class ScoreSection(object):
@@ -87,7 +88,7 @@ class PlayerTimes(ScoreSection):
                 FROM player_times \
                 LEFT JOIN players ON player_times.player_id = players.id \
                 LEFT JOIN teams on players.team_id = teams.id \
-                WHERE round_id = ? ORDER BY player_times.time_value", (self.round_id, ))
+                WHERE round_id = ? ORDER BY player_times.points DESC", (self.round_id, ))
             result = result.fetchall()
 
 
@@ -146,7 +147,7 @@ class TeamTimes(ScoreSection):
                 SELECT teams.id, teams.name, team_times.time_value, team_times.points \
                 FROM team_times \
                 LEFT JOIN teams on team_times.team_id = teams.id \
-                WHERE round_id = ? ORDER BY team_times.time_value", (self.round_id, ))
+                WHERE round_id = ? ORDER BY team_times.points DESC", (self.round_id, ))
             result = result.fetchall()
 
 
@@ -360,5 +361,5 @@ class ScoreBoard():
             html += section.readHtml()
 
 
-        with open(os.path.join(self._html_dir, 'column{:d}.html'.format(c)), 'w') as f:
+        with open(os.path.join(self._html_dir, 'column{:d}.html'.format(c)), 'w', encoding='utf-8') as f:
             f.write(html)

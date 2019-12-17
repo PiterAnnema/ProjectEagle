@@ -3,8 +3,8 @@ import tourStoredProcedures
 
 def main():
     import json
-    with open('teams.json', 'r') as f:
-        teams = json.load(f)
+    with open('teams.json', 'r', encoding='utf-8') as f:
+        teams = json.load(f, encoding='utf-8')
 
     tourStoredProcedures.makeTables()
 

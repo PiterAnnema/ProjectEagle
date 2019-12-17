@@ -88,6 +88,8 @@ void gameCycle()
           Serial.print(finish_code);
           Serial.print(' ');
           Serial.print(i);
+//          Serial.print(' ');
+//          Serial.print(players[i]);
           Serial.print(":");
           Serial.println(player_times[i]);
         }
@@ -97,6 +99,12 @@ void gameCycle()
 
     all_states = true;                        // there are still players in the game
   }
+//  for (int i = 0; i != n_players; ++i) {
+//    if( player_gs[i]) {
+//      Serial.print(players[i]); Serial.print(' ');
+//    }
+//  }
+//  Serial.println();
 
   if (!all_states) {                          // are there players left in the game?
     stopGame();

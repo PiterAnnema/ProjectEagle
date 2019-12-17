@@ -3,6 +3,7 @@ from DBConnection import DBConnection
 
 def makeTables():
     with DBConnection() as db:
+        db.execute_query("PRAGMA encoding = \"UTF-8\"")
         db.execute_query(
             "CREATE TABLE IF NOT EXISTS players \
             (   id          INTEGER PRIMARY KEY, \
@@ -34,6 +35,7 @@ def makeTables():
                 round_id    INTEGER NOT NULL, \
                 time_value  INTEGER NOT NULL, \
                 points      INTEGER NOT NULL, \
+                dsq         BOOLEAN DEFAULT 0, \
                 UNIQUE(player_id, round_id) \
             )"
         )
@@ -45,6 +47,7 @@ def makeTables():
                 round_id    INTEGER NOT NULL, \
                 time_value  INTEGER NOT NULL, \
                 points      INTEGER NOT NULL, \
+                dsq         BOOLEAN DEFAULT 0, \
                 UNIQUE(team_id, round_id) \
             )"
         )

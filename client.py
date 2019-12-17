@@ -246,6 +246,7 @@ class TeamRound(Round):
 
 class Tour():
     def __init__(self, name: str, mode: str):
+        DBConnection.backup()
         # Establish a serial connection
         self.serial_conn = SerialHandler(config.SERIAL_PORT, config.SERIAL_BAUD)
         self.serial_monitor = StreamMonitor(self.serial_conn.read)
@@ -254,6 +255,7 @@ class Tour():
         # Start a prompt monitor
         self.prompt_monitor = StreamMonitor(input)
         self.prompt_monitor.start(self.processPrompt, name='PROMPT')
+
 
 
         mode = mode.lower()
@@ -271,7 +273,7 @@ class Tour():
                 [timeBoard],
                 [Scoreboard.TeamCards()],
                 [Scoreboard.Leaderboard('Leaderboard')],
-                [Scoreboard.Leaderboard('Ladies', 'female'), Scoreboard.Leaderboard('Sjaars', 'sjaars')]
+                [Scoreboard.Leaderboard('Ladies', 'female'), Scoreboard.Leaderboard('Sjaars', 'sjaars'), Scoreboard.Leaderboard('Su', 'su')]
             ]
 
         self.sb = Scoreboard.ScoreBoard(sections)
@@ -318,13 +320,16 @@ class Tour():
 
 
     def stopGame(self):
-        self.sb.stop()
         print('Closing serial connection')
         self.serial_monitor.stop()
         print('Closing prompt connection')
         print('Press enter to exit prompt')
         self.prompt_monitor.stop()
-
+        from disqualify import disqualifyMenu
+        while disqualifyMenu():
+            self.sb.updateAll()
+        self.sb.updateAll(force=True)
+        self.sb.stop()
 
 
 def main():
